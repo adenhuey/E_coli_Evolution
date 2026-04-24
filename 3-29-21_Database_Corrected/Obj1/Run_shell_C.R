@@ -10,7 +10,7 @@ library(RcppArmadillo)
 library(Rcpp)
 source("Main_new_C_par.R")
 source("Func_Support.R")
-args=commandArgs(T)
+args=commandArgs(T)  #creates a character vector captured by the command line
 input<-args[1]
 seed<-as.integer(args[2])
 traits<-as.integer(args[3])

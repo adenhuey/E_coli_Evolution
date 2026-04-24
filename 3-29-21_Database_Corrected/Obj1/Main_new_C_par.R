@@ -21,7 +21,7 @@ Main_new_C_par<-function(input, seed, traits, obj_best, Iter, exp_info){
 
   # DB_env<<-DB[ , col_env]
   # DB_gene<<-DB[ , col_gene]
-  GR<-DB[, "Growth.rate..1.h."]
+  GR<-DB[, "Growth.rate..1.h."]    #extracts the growth rate target variable for that line
   # GR_basal<-DB[, "Basal_Growth_Rate"]
   # X<-t(DB_gene)
   # X[is.na(X)]<-0
@@ -32,8 +32,8 @@ Main_new_C_par<-function(input, seed, traits, obj_best, Iter, exp_info){
   Medium_info<-DB[, (match("Medium_Start",colnames(DB))+1):(match("Medium_End",colnames(DB))-1)]
   Treatment_info<-DB[, (match("Treatment_Start",colnames(DB))+1):(match("Treatment_End",colnames(DB))-1)]
   
-  X<-DB[,(match("Gene_Start",colnames(DB))+1):(match("Gene_End",colnames(DB))-1)]
-  Y<-cbind(Strain_info, Medium_info, Treatment_info)
+  X<-DB[,(match("Gene_Start",colnames(DB))+1):(match("Gene_End",colnames(DB))-1)]  #x is the gene matrix
+  Y<-cbind(Strain_info, Medium_info, Treatment_info)  #y is the environment matrix 
   X<-t(X)
   Y<-t(Y)
   X[is.na(X)]<-0
