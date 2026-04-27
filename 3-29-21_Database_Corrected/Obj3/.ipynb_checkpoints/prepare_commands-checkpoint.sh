@@ -1,11 +1,11 @@
 echo "# Started" > list_of_commands.txt
-exp_unique_num=$(awk 'NR==1 {next} {print $1}' ../../Merged_Data_5.csv | cut -d "," -f 4 | uniq | wc -l) #stores unique count of experiments 
-traits=64 #num traits param
-seed=5 #set the seed 
-K=10 # batch size/ number of folds
-obj_best=0.99 # objective threshold
-Iter=10000000 #number of iterations
-for ((trait=1; trait<=traits; trait=trait*2)); do #every iteration it doubles traits variable
+exp_unique_num=$(awk 'NR==1 {next} {print $1}' ../../Merged_Data_5.csv | cut -d "," -f 4 | uniq | wc -l)
+traits=64
+seed=5
+K=10
+obj_best=0.0005
+Iter=10000000
+for ((trait=1; trait<=traits; trait=trait*2)); do
 	for ((i=1; i<=$exp_unique_num; i=i+10)); do 
 		if [ $(($exp_unique_num - $i)) -lt 10 ]; then 
 			echo "Almost done"; 

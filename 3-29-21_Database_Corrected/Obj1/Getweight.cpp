@@ -1,3 +1,6 @@
+//assign weights to each data point in the training dataset, based on how frequent its value (i.e. growth rate) is seen in the database. For example, most bacterial growth rates are between 0.5 and 0.8, then data points out of this range will be given larger weights so that the model will not only focus on those more common values
+
+
 #include <fstream>
 #include <iostream>
 #include <algorithm>
@@ -17,7 +20,7 @@ NumericVector Getweight(NumericVector GR_tr);
 //[[Rcpp::export]]
 NumericVector Getweight(NumericVector GR_tr){
 	cout<<"BEGIN"<<endl;
-	NumericVector GR_tr_sorted = clone(GR_tr).sort();
+	NumericVector GR_tr_sorted = clone(GR_tr).sort();    //create a NumericVector of sorted growth rates
 	NumericVector GR_tr_count (unique(GR_tr_sorted).length(), 0);
 	//Rcout<<as<arma::rowvec>(GR_tr[seq_len(20)])<<endl;
 	//cout<<GR_tr_sorted<<endl;
@@ -25,7 +28,7 @@ NumericVector Getweight(NumericVector GR_tr){
 	float weight;
 	int pos = 0;
 	double current = GR_tr_sorted[0];
-	
+// Walk through the sorted values and tally counts per unique value
 	for (int i=0; i<GR_tr_sorted.length(); i++){
 		if (GR_tr_sorted[i] == current){
 			GR_tr_count[pos]++;

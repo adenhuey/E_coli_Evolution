@@ -1,17 +1,45 @@
 Main_new_C_par<-function(input, seed, traits, obj_best, Iter, exp_info){
 
+  # ============================================================
+  # 1: LOAD REQUIRED LIBRARIES
+  # ============================================================
   library(foreach)
   library(doParallel)
   library(doMC)
+
+  # ============================================================
+  # SECTION 2: READ DATABASE AND SET SEED
+  # ------------------------------------------------------------
+  # Reads the CSV containing all E. coli experiments. 
+  # ============================================================
+    
   DB<-read.csv(input, fileEncoding="latin1")
-  set.seed(seed)    
+  set.seed(seed) 
+
+# ============================================================
+  # SECTION 3: INITIALIZE RESULT CONTAINERS
+  # ------------------------------------------------------------
+  # These lists and vectors will accumulate results across all
+  # K folds as they complete:
+  #   val_result  — predicted vs real growth rates for test sets
+  #   tr_result   — predicted vs real growth rates for training sets
+  #   G_each_K    — all K learned G matrices (gene-trait)
+  #   E_each_K    — all K learned E matrices (environment-trait)
+  #   va_idx_all  — row indices used for validation across folds
+  #   tr_idx_all  — row indices used for training across folds
+  # ============================================================
+    
   val_result<-list("Lab"=c(), "Simu"=c())
   tr_result<-list("Lab"=c(), "Simu"=c())
   G_each_K<-c()
   E_each_K<-c()
   va_idx_all<-c()
   tr_idx_all<-c()
-  
+
+# ============================================================
+  # SECTION 4: EXTRACT TARGET VARIABLE(growth rate) AND INPUTS( X and Y matrix)
+  # ============================================================
+    
   # colnames_total<-colnames(DB)
   # col_gene<-(grep("Gene_start", colnames_total)+1):(grep("Growth_Rate", colnames_total)-1)
   # col_gene_start<-grep("Gene_start", colnames_total)+1
@@ -32,14 +60,21 @@ Main_new_C_par<-function(input, seed, traits, obj_best, Iter, exp_info){
   Medium_info<-DB[, (match("Medium_Start",colnames(DB))+1):(match("Medium_End",colnames(DB))-1)]
   Treatment_info<-DB[, (match("Treatment_Start",colnames(DB))+1):(match("Treatment_End",colnames(DB))-1)]
   
-  X<-DB[,(match("Gene_Start",colnames(DB))+1):(match("Gene_End",colnames(DB))-1)]  #x is the gene matrix
-  Y<-cbind(Strain_info, Medium_info, Treatment_info)  #y is the environment matrix 
+  X<-DB[,(match("Gene_Start",colnames(DB))+1):(match("Gene_End",colnames(DB))-1)]  
+  Y<-cbind(Strain_info, Medium_info, Treatment_info)  
   X<-t(X)
   Y<-t(Y)
   X[is.na(X)]<-0
   Y[is.na(Y)]<-0
   print(dim(X))
   print(dim(Y))
+
+
+# ============================================================
+  # SECTION 5: BUILD TRAIN / VALIDATION INDEX LISTS
+  # ============================================================
+
+    
   # if (basal){
   #   GR<-GR_lab-GR_basal  
   # }
@@ -61,7 +96,7 @@ Main_new_C_par<-function(input, seed, traits, obj_best, Iter, exp_info){
   tr_row_index<-list()
   va_row_index<-list()
   
-  K<-length(exp_info)/3
+  K<-length(exp_info)/3   #K is the number of experiments or folds
   for (i in 1:K){
     print(exp_info[((i-1)*3+2)]:exp_info[((i-1)*3+3)])
     for_va<-exp_info[((i-1)*3+2)]:exp_info[((i-1)*3+3)]
@@ -73,6 +108,10 @@ Main_new_C_par<-function(input, seed, traits, obj_best, Iter, exp_info){
     tr_row_index[[i]]<-sample((1:nrow(DB))[-for_va])
     print(for_va)	
   }
+
+# ============================================================
+  # SECTION 6: INITIALIZE G AND E MATRICES FOR EACH FOLD
+  # ------------------------------------------------------------
   G_initial<-list()
   E_initial<-list()
   
@@ -96,7 +135,17 @@ Main_new_C_par<-function(input, seed, traits, obj_best, Iter, exp_info){
   GR_tr<-list()
   GR_va<-list()
   weight<-list()
-  
+
+# ============================================================
+  # SECTION 7: COMPILE AND CALL Getweight.cpp
+  # ------------------------------------------------------------
+  # Getweight computes a weight for each training data point
+  # based on how common its growth rate value is in the dataset.
+  # Growth rates that appear rarely get high weights, so the model
+  # pays extra attention to them during training. This prevents
+  # the optimizer from only fitting the most common growth rate
+  # range (e.g., 0.5) and ignoring rare high or low values.
+  # ============================================================
   
   cat("Sourcing Getweight.cpp\n")    
   sourceCpp("./Getweight.cpp") 
@@ -145,8 +194,24 @@ Main_new_C_par<-function(input, seed, traits, obj_best, Iter, exp_info){
     cat("Round ", 1, "\n", "Goal of obj ", obj_best, "\n", file=filename_report, append=T)
     cat("Round ", 1, "\n", "Goal of obj ", obj_best, "\n")
     	
-    weight[[i]] <- Getweight(GR_tr[[i]])
+    weight[[i]] <- Getweight(GR_tr[[i]])   #calculates a weight for each growth rate. returned is a numeric vector.
  }
+
+# ============================================================
+  # SECTION 8: GetpBad.cpp AND CALIBRATE SA TEMPERATURE
+  # ------------------------------------------------------------
+  # Simulated annealing (SA) requires two temperature parameters:
+  #   Tinit  — starting temperature: almost all moves accepted,
+  #             allowing the optimizer to explore freely
+  #   Tfinal — ending temperature: almost no bad moves accepted,
+  #             locking in the best solution found
+  #
+  # GetpBad returns the estimated average probability of accepting a bad move (pBad).
+  #
+  # This is done independently for each fold.
+  # ============================================================
+
+    
   cat("Sourcing GetpBad.cpp\n")    
   sourceCpp("./GetpBad.cpp") 
   cat("Sourcing Finished\n")
@@ -159,7 +224,7 @@ Main_new_C_par<-function(input, seed, traits, obj_best, Iter, exp_info){
     filename_report<-paste("run_report_", current_exp, ".txt", sep="")
     filename_result<-paste("run_result_", current_exp, ".txt", sep="")
     registerDoMC(detectCores(logical=F))
-    while(GetpBad(G_initial[[i]], E_initial[[i]], X_tr[[i]], Y_tr[[i]], GR_tr[[i]], SA_Tinit, weight[[i]])<threshold){
+    while(GetpBad(G_initial[[i]], E_initial[[i]], X_tr[[i]], Y_tr[[i]], GR_tr[[i]], SA_Tinit, weight[[i]])<threshold){  #while pbad is less than threshold
        	SA_Tinit<-SA_Tinit*10
     }
     SA_Tinit<-SA_Tinit/2
@@ -179,11 +244,22 @@ Main_new_C_par<-function(input, seed, traits, obj_best, Iter, exp_info){
     }
     cat("Experiment:", current_exp, "has Tfinal of: ", SA_Tfinal, '\n')     
 #   T_range[[i]]<-c(500, 1e-5)
-    T_range<-c(SA_Tinit, SA_Tfinal)
+
+      
+    T_range<-c(SA_Tinit, SA_Tfinal)    #get the final Simulated annealing temperature range
+
+      
     cat("Temperature range: ", T_range, "\n")  
     cat("Temperature range: ", T_range, "\n", file=filename_report, append=T)
     T_range
   }  
+# ============================================================
+  # SECTION 9: COMPILE Train_SA_C.cpp AND RUN PARALLEL TRAINING
+  # ------------------------------------------------------------
+  # Train_SA_C runs the full simulated annealing optimization for one fold, iteratively
+  # adjusting G and E to minimize the weighted objective function.
+  # ============================================================
+    
   print("Rcpp compilation started")
   cat("Rcpp version: ", packageDescription("Rcpp")$Version, "\n")
   sourceCpp("./Train_SA_C.cpp") 
@@ -191,7 +267,7 @@ Main_new_C_par<-function(input, seed, traits, obj_best, Iter, exp_info){
   cat("Iter is: ", Iter, "\n")
     
 #  foreach(i=1:K, .export=c("Validate", "GetpBad", "sourceCpp", "traits", "X", "Y", "tr_row_index", "va_row_index", "result_train", "G_each_K", "E_each_K", "tr_result", "Iter", "obj_best", "seed", "K")) %dopar% {
-  re_<-foreach(i=1:K) %dopar% {
+  re_<-foreach(i=1:K) %dopar% {  #for each fold assign result to results (re_) . Results are the optimized gene matrix, optimized E matrix, predicted growth rates for the training set, # of SA iterations done, and the final weighted log-ratio error — the raw value before being exponentiated into obj
 
     	current_exp<-exp_info[(i-1)*3+1] 
         result<-Train_SA_C(G_initial[[i]], E_initial[[i]], X_tr[[i]], Y_tr[[i]], GR_tr[[i]], X_va[[i]], Y_va[[i]], GR_va[[i]], 1, 1, current_exp, TT[[i]], weight[[i]])
@@ -203,6 +279,13 @@ Main_new_C_par<-function(input, seed, traits, obj_best, Iter, exp_info){
   print(length(re_))  
   print(length(re_[[1]]))
     #score<-append(score, result_train[[i]][[1]])
+
+
+# ============================================================
+  # SECTION 10: COLLECT RESULTS and Generate files
+  # ============================================================
+
+    
   for (i in 1:K){ 
     current_exp<-exp_info[(i-1)*3+1] 
     filename_report<-paste("run_report_", current_exp, ".txt", sep="")
@@ -265,6 +348,8 @@ Main_new_C_par<-function(input, seed, traits, obj_best, Iter, exp_info){
     cat("Dot Product Prediction of Growth Rate:\n", file=filename_report, append=T)
     cat(result_validate[[2]], file=filename_report, append=T)
   }  
+
+#return results 
   
   Draw(K, tr_result, "training")
   Draw(K, val_result, "testing")

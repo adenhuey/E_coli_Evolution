@@ -1,3 +1,13 @@
+//OUTPUTS:
+//   Returns a List containing:
+//     [[1]] G          — optimized gene-trait matrix
+//     [[2]] E          — optimized environment-trait matrix
+//     [[3]] GR_guess_tr — predicted growth rates for training set
+//     [[4]] SA_iter    — number of iterations taken to converge
+//     [[5]] GR_mean_diff
+
+
+
 #include <fstream>
 #include <iostream>
 #include <algorithm>
