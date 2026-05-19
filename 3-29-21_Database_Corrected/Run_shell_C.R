@@ -1,9 +1,3 @@
-my_paths<-.libPaths() 
-my_paths<-c(my_paths, "/home/weir4/R/x86_64-pc-linux-gnu-library/3.5", "/pkg/R/3.5.1-9.25.2018/lib64/R/library", "/home/weir4/local/R_libs")
-.libPaths(my_paths)
-
-#library(stringi, lib.loc="~/local/R_libs")
-#library(stringr, lib.loc="~/local/R_libs")
 library(stringi)
 library(stringr)
 library(dplyr)
